@@ -1,10 +1,28 @@
 import * as vscode from 'vscode';
-import { TestSuiteInfo, TestEvent } from 'vscode-test-adapter-api';
+import { TestSuiteInfo, TestEvent, TestRunStartedEvent, TestRunFinishedEvent, TestSuiteEvent, TestController } from 'vscode-test-adapter-api';
 import * as childProcess from 'child_process';
 import { Tests } from './tests';
+import { Log } from 'vscode-test-adapter-util';
 
-export class MinitestTests extends Tests {
-  testFrameworkName = 'Minitest';
+export class RakeBasedTests extends Tests {
+  testFrameworkName: string;
+  rakeCommand: string;
+  testDirectory: string;
+
+  constructor(
+    framework: string,
+    rakeCommand: string,
+    testDirectory: string,
+    context: vscode.ExtensionContext,
+    testStatesEmitter: vscode.EventEmitter<TestRunStartedEvent | TestRunFinishedEvent | TestSuiteEvent | TestEvent>,
+    log: Log,
+    workspace: vscode.WorkspaceFolder
+  ) {
+    super(context, testStatesEmitter, log, workspace);
+    this.testFrameworkName = framework;
+    this.rakeCommand = rakeCommand;
+    this.testDirectory = testDirectory;
+  }
 
   /**
    * Representation of the Minitest test suite as a TestSuiteInfo object.
@@ -14,10 +32,10 @@ export class MinitestTests extends Tests {
   tests = async () => new Promise<TestSuiteInfo>((resolve, reject) => {
     try {
       // If test suite already exists, use testSuite. Otherwise, load them.
-      let minitestTests = this.testSuite ? this.testSuite : this.loadTests();
-      return resolve(minitestTests);
+      let tests = this.testSuite ? this.testSuite : this.loadTests();
+      return resolve(tests);
     } catch (err) {
-      this.log.error(`Error while attempting to load Minitest tests: ${err.message}`);
+      this.log.error(`Error while attempting to load tests: ${err.message}`);
       return reject(err);
     }
   });
@@ -28,7 +46,7 @@ export class MinitestTests extends Tests {
    * @return The raw output from the Minitest JSON formatter.
    */
   initTests = async () => new Promise<string>((resolve, reject) => {
-    let cmd = `${this.getTestCommand()} vscode:minitest:list`;
+    let cmd = `${this.getTestCommand()} vscode:${this.testFrameworkName}:list`;
 
     // Allow a buffer of 64MB.
     const execArgs: childProcess.ExecOptions = {
@@ -37,11 +55,11 @@ export class MinitestTests extends Tests {
       env: this.getProcessEnv()
     };
 
-    this.log.info(`Getting a list of Minitest tests in suite with the following command: ${cmd}`);
+    this.log.info(`Getting a list of tests in suite with the following command: ${cmd}`);
 
     childProcess.exec(cmd, execArgs, (err, stdout) => {
       if (err) {
-        this.log.error(`Error while finding Minitest test suite: ${err.message}`);
+        this.log.error(`Error while finding test suite: ${err.message}`);
         this.log.error(`Output: ${stdout}`);
         // Show an error message.
         vscode.window.showWarningMessage("Ruby Test Explorer failed to find a Minitest test suite. Make sure Minitest is installed and your configured Minitest command is correct.");
@@ -58,8 +76,8 @@ export class MinitestTests extends Tests {
    * @return The Minitest command
    */
   protected getTestCommand(): string {
-    let command: string = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestCommand') as string) || 'bundle exec rake';
-    return `${command} -R ${(process.platform == 'win32') ? '%EXT_DIR%' : '$EXT_DIR'}`;
+    // let command: string = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestCommand') as string) || 'bundle exec rake';
+    return `${this.rakeCommand} -R ${(process.platform == 'win32') ? '%EXT_DIR%' : '$EXT_DIR'}`;
   }
 
   /**
@@ -68,8 +86,9 @@ export class MinitestTests extends Tests {
    * @return The test directory
    */
   getTestDirectory(): string {
-    let directory: string = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestDirectory') as string);
-    return directory || './test/';
+    // let directory: string = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestDirectory') as string);
+    // return directory || './test/';
+    return this.testDirectory;
   }
 
   /**
@@ -87,11 +106,23 @@ export class MinitestTests extends Tests {
    * @return The env
    */
   protected getProcessEnv(): any {
+    const rubyOpt = []
+
+    const envRubyOpt = process.env["RUBYOPT"] || ""
+    if (envRubyOpt) {
+      rubyOpt.push(envRubyOpt)
+    }
+    const configRubyOpt = vscode.workspace.getConfiguration('rubyTestExplorer', null).get('rubyOpt') as string
+    if (configRubyOpt) {
+      rubyOpt.push(configRubyOpt)
+    }
+
     return Object.assign({}, process.env, {
       "RAILS_ENV": "test",
       "EXT_DIR": this.getRubyScriptsLocation(),
       "TESTS_DIR": this.getTestDirectory(),
-      "TESTS_PATTERN": this.getFilePattern().join(',')
+      "TESTS_PATTERN": this.getFilePattern().join(','),
+      "RUBYOPT": rubyOpt.join(" ")
     });
   }
 
@@ -102,10 +133,10 @@ export class MinitestTests extends Tests {
   * @return The test command
   */
   protected testCommandWithDebugger(debuggerConfig?: vscode.DebugConfiguration): string {
-    let cmd = `${this.getTestCommand()} vscode:minitest:run`
+    let cmd = `${this.getTestCommand()} vscode:${this.testFrameworkName}:run`
     if (debuggerConfig) {
       cmd = `rdebug-ide --host ${debuggerConfig.remoteHost} --port ${debuggerConfig.remotePort}`
-            + ` -- ${(process.platform == 'win32') ? '%EXT_DIR%' : '$EXT_DIR'}/debug_minitest.rb`
+            + ` -- ${(process.platform == 'win32') ? '%EXT_DIR%' : '$EXT_DIR'}/debug_${this.testFrameworkName}.rb`
     }
     return cmd
   }
@@ -200,7 +231,7 @@ export class MinitestTests extends Tests {
     this.log.debug(`Handling status of test: ${JSON.stringify(test)}`);
     if (test.status === "passed") {
       this.testStatesEmitter.fire(<TestEvent>{ type: 'test', test: test.id, state: 'passed' });
-    } else if (test.status === "failed" && test.pending_message === null) {
+    } else if (test.status === "failed" && !test.pending_message) {
       let errorMessageShort: string = test.exception.message;
       let errorMessageLine: number = test.line_number;
       let errorMessage: string = test.exception.message;

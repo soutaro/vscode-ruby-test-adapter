@@ -4,7 +4,7 @@ import { Log } from 'vscode-test-adapter-util';
 import * as childProcess from 'child_process';
 import { Tests } from './tests';
 import { RspecTests } from './rspecTests';
-import { MinitestTests } from './minitestTests';
+import { RakeBasedTests } from './minitestTests';
 
 export class RubyAdapter implements TestAdapter {
   private disposables: { dispose(): void }[] = [];
@@ -43,7 +43,28 @@ export class RubyAdapter implements TestAdapter {
       this.testsEmitter.fire(<TestLoadFinishedEvent>{ type: 'finished', suite: loadedTests });
     } else if (this.getTestFramework() === "minitest") {
       this.log.info('Loading Minitest tests...');
-      this.testsInstance = new MinitestTests(this.context, this.testStatesEmitter, this.log, this.workspace);
+      this.testsInstance = new RakeBasedTests(
+        "minitest",
+        (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestCommand') as string) || 'bundle exec rake',
+        (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestDirectory') as string) || "./test",
+        this.context,
+        this.testStatesEmitter,
+        this.log,
+        this.workspace
+      );
+      const loadedTests = await this.testsInstance.loadTests();
+      this.testsEmitter.fire(<TestLoadFinishedEvent>{ type: 'finished', suite: loadedTests });
+    } else if (this.getTestFramework() === 'test-unit') {
+      this.log.info('Loading Test-Unit tests...');
+      this.testsInstance = new RakeBasedTests(
+        "test-unit",
+        (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('testUnitCommand') as string) || 'bundle exec rake',
+        (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('testUnitDirectory') as string) || "./test",
+        this.context,
+        this.testStatesEmitter,
+        this.log,
+        this.workspace
+      );
       const loadedTests = await this.testsInstance.loadTests();
       this.testsEmitter.fire(<TestLoadFinishedEvent>{ type: 'finished', suite: loadedTests });
     } else {
@@ -60,7 +81,25 @@ export class RubyAdapter implements TestAdapter {
       if (testFramework === "rspec") {
         this.testsInstance = new RspecTests(this.context, this.testStatesEmitter, this.log, this.workspace);
       } else if (testFramework === "minitest") {
-        this.testsInstance = new MinitestTests(this.context, this.testStatesEmitter, this.log, this.workspace);
+        this.testsInstance = new RakeBasedTests(
+          "minitest",
+          (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestCommand') as string) || 'bundle exec rake',
+          (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestDirectory') as string) || "./test",
+          this.context,
+          this.testStatesEmitter,
+          this.log,
+          this.workspace
+        );
+      } else if (testFramework === 'test-unit') {
+        this.testsInstance = new RakeBasedTests(
+          "test-unit",
+          (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('testUnitCommand') as string) || 'bundle exec rake',
+          (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('testUnitDirectory') as string) || "./test",
+          this.context,
+          this.testStatesEmitter,
+          this.log,
+          this.workspace
+        );
       }
     }
     if (this.testsInstance) {
@@ -133,7 +172,7 @@ export class RubyAdapter implements TestAdapter {
 
     let testFramework: string = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('testFramework') as string);
     // If the test framework is something other than auto, return the value.
-    if (['rspec', 'minitest', 'none'].includes(testFramework)) {
+    if (['rspec', 'minitest', 'test-unit', 'none'].includes(testFramework)) {
       this.currentTestFramework = testFramework;
       return testFramework;
       // If the test framework is auto, we need to try to detect the test framework type.
@@ -228,6 +267,8 @@ export class RubyAdapter implements TestAdapter {
     if (testFramework === 'rspec') {
       testDirectory = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('rspecDirectory') as string) || './spec/';
     } else if (testFramework === 'minitest') {
+      testDirectory = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestDirectory') as string) || './test/';
+    } else if (testFramework === 'test-unit') {
       testDirectory = (vscode.workspace.getConfiguration('rubyTestExplorer', null).get('minitestDirectory') as string) || './test/';
     }
 

@@ -90,7 +90,8 @@
             "none",
             "auto",
             "rspec",
-            "minitest"
+            "minitest",
+            "test-unit"
           ],
           "enumDescriptions": [
             "Disable Ruby Test Runner.",
@@ -124,6 +125,18 @@
           "type": "string",
           "scope": "resource"
         },
+        "rubyTestExplorer.testUnitCommand": {
+          "markdownDescription": "Define how to run test-unit with Rake, for example `./bin/rake`, `bundle exec rake` or `rake`.",
+          "default": "bundle exec rake",
+          "type": "string",
+          "scope": "resource"
+        },
+        "rubyTestExplorer.testUnitDirectory": {
+          "markdownDescription": "The location of your test-unit directory relative to the root of the workspace.",
+          "default": "./test/",
+          "type": "string",
+          "scope": "resource"
+        },
         "rubyTestExplorer.filePattern": {
           "markdownDescription": "The naming pattern for your tests.",
           "default": [
@@ -146,6 +159,12 @@
         "rubyTestExplorer.debuggerPort": {
           "markdownDescription": "The port to connect the debugger to.",
           "default": "1234",
+          "type": "string",
+          "scope": "resource"
+        },
+        "rubyTestExplorer.rubyOpt": {
+          "markdownDescription": "RUBYOPT environment variable.",
+          "default": "",
           "type": "string",
           "scope": "resource"
         }
