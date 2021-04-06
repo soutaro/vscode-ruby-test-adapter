@@ -137,10 +137,23 @@ class RakeTaskTest < Minitest::Test
     stdout, stderr, status = Open3.capture3(env, "rake -R #{__dir__}/../.. vscode:minitest:run test", chdir: dir.to_s)
 
     refute_predicate status, :success?
+
+    assert_match /^#{Regexp.escape("RUNNING: ./test/square_test.rb[4]")}$/, stdout
+    assert_match /^#{Regexp.escape("PASSED: ./test/square_test.rb[4]")}$/, stdout
+    assert_match /^#{Regexp.escape("RUNNING: ./test/square_test.rb[8]")}$/, stdout
+    assert_match /^#{Regexp.escape("FAILED: ./test/square_test.rb[8]")}$/, stdout
+    assert_match /^RUNNING: \.\/test\/square_test\.rb\[12\]$/, stdout
+    assert_match /^FAILED: \.\/test\/square_test\.rb\[12\]$/, stdout
+    assert_match /^RUNNING: \.\/test\/square_test\.rb\[16\]$/, stdout
+    assert_match /^PENDING: \.\/test\/square_test\.rb\[16\]$/, stdout
+
     assert_match /START_OF_TEST_JSON(.*)END_OF_TEST_JSON/, stdout
 
     stdout =~ /START_OF_TEST_JSON(.*)END_OF_TEST_JSON/
+
     json = JSON.parse($1, symbolize_names: true)
+
+    pp json: json
 
     examples = json[:examples]
 

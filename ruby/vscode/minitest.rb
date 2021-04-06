@@ -11,12 +11,6 @@ module Minitest
 end
 
 module VSCode
-  module_function
-
-  def project_root
-    @project_root ||= Pathname.new(Dir.pwd)
-  end
-
   module Minitest
     module_function
 

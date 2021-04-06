@@ -7,4 +7,5 @@ group :development, :test do
   gem "rake"
   gem "minitest"
   gem "rspec"
+  gem "test-unit"
 end
